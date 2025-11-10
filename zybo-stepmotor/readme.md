@@ -96,9 +96,10 @@ https://cookierobotics.com/042/
 // zybo_z720_stepper_top.v
 module zybo_z720_stepper_top #(
     parameter integer CLK_HZ        = 125_000_000, 
-    parameter integer STEPS_PER_SEC = 600,         // 초당 스텝 수(half-step 기준). 28BYJ-48은 200~600 정도 무난
-    parameter         HALF_STEP     = 1            // 1: half-step(8패턴), 0: full-step(4패턴)
+    parameter integer STEPS_PER_SEC = 600         // 초당 스텝 수(half-step 기준). 28BYJ-48은 200~600 정도 무난
+    //parameter         HALF_STEP     = 1            // 1: half-step(8패턴), 0: full-step(4패턴)
 )(
+    input wire HALF_STEP,   //full_step = 0 , half step = 1 구분 
     input  wire clk,         // 보드 클럭
     input  wire rst_n,       // Active-Low Reset
     input  wire sw_run,      // RUN/STOP 스위치 (1=RUN, 0=STOP)
@@ -108,6 +109,9 @@ module zybo_z720_stepper_top #(
 
     // -------- 스위치 동기화/디바운스 --------
     wire run_clean, dir_clean;
+  
+   
+   
 
     debounce #(
         .CLK_HZ(CLK_HZ),
@@ -143,8 +147,10 @@ module zybo_z720_stepper_top #(
     end
 
     // -------- 스텝 인덱스 (0..7 half-step) --------
-    localparam integer MAX_IDX = (HALF_STEP ? 7 : 3);
+    //localparam integer MAX_IDX = (HALF_STEP ? 7 : 3);
+    wire [2:0] MAX_IDX = (HALF_STEP ? 7 : 3);
     reg [2:0] step_idx; // 충분한 비트 폭
+    
 
     always @(posedge clk or posedge rst_n) begin
         if (rst_n) begin
