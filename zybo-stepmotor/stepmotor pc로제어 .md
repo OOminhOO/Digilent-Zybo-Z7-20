@@ -123,7 +123,7 @@ set_property -dict { PACKAGE_PIN H15   IOSTANDARD LVCMOS33 } [get_ports { coils[
 
 1. File → Export → Export Hardware 클릭
 2. "Include bitstream" 선택
-3. 파일 저장: `system_wrapper.xsa`
+3. 파일 저장: `stepmotor_top_wrapper.xsa`
 4. 이 파일을 Ubuntu로 전송 (USB, 네트워크 등)
 
 ---
@@ -134,7 +134,7 @@ set_property -dict { PACKAGE_PIN H15   IOSTANDARD LVCMOS33 } [get_ports { coils[
 
 ```bash
 # XSA 파일 준비
-cp /mnt/share/system_wrapper.xsa ~/projects/
+cp /mnt/share/`stepmotor_top_wrapper.xsa ~/projects/
 
 # PetaLinux 설치 확인 (2022.2 버전)
 source ~/petalinux/2022.2/settings.sh
@@ -200,6 +200,13 @@ Device Drivers --->
 ```
 
 저장하고 종료 (Save → Exit)
+<br>
+<br>
+
+stepmotor_top_wrapper.xsa 압출풀고  
+design_1_wrapper.bit -> cd ~/projects/myproject/images/linux 경로에 복사
+
+
 
 ### 2.6 PetaLinux 빌드
 
@@ -214,7 +221,7 @@ petalinux-build
 
 petalinux-package --boot \
     --fsbl images/linux/zynq_fsbl.elf \
-    --fpga images/linux/system_wrapper.bit \
+    --fpga images/linux/design_1_wrapper.bit \
     --u-boot images/linux/u-boot.elf \
     --force
 
@@ -234,7 +241,7 @@ grep "CONFIG_GPIO" build/tmp/work/zynq_generic-xilinx-linux-gnueabi/linux-xlnx/*
 
 
 **예상 출력:**
-CONFIG_GPIOLIB=y
+CONFIG_GPIOLIB=yㅇ
 CONFIG_GPIO_SYSFS=y
 CONFIG_GPIO_XILINX=y
 CONFIG_OF_GPIO=y
