@@ -344,13 +344,6 @@ tools -> create and packege new ip
 4. 파일명: `zybo_constraints.xdc`
 
 
-```xdc
-set_property -dict { PACKAGE_PIN V12   IOSTANDARD LVCMOS33 } [get_ports { coils[0] }]; #IO_L4P_T0_34 Sch=je[1]						 
-set_property -dict { PACKAGE_PIN W16   IOSTANDARD LVCMOS33 } [get_ports { coils[1] }]; #IO_L18N_T2_34 Sch=je[2]                     
-set_property -dict { PACKAGE_PIN J15   IOSTANDARD LVCMOS33 } [get_ports { coils[2] }]; #IO_25_35 Sch=je[3]                          
-set_property -dict { PACKAGE_PIN H15   IOSTANDARD LVCMOS33 } [get_ports { coils[3] }]; #IO_L19P_T3_35 Sch=je[4]
-```
-
 #### Step 2: coils[3:0] 핀 매핑 작성
 
 
@@ -513,22 +506,16 @@ CONFIG_GPIO_GENERIC=y
 ---
 
 
-## 해결 안됨 ! bolck design에서 gpio 에서 xslice하지 않고 한번에 받아서 코드에서 나눠서 분배해줌  
+</details>  
 
-</details>
+## shell script로 제어,  C파일을 arm용으로 컴파일 해서 제어
 
-=================================================  
-만든 모듈안됨! 해결방안!  
-## 해결안 1  
-=================================================  
 
-<details>
+<details>  
+   
 <summary>펼치기/접기 **개발환경** </summary>  
 
 
-
-
-## shell script로 제어
 
 ### 3.1 Zybo 부팅 및 로그인
 
@@ -852,33 +839,11 @@ int main(void){
 ```
 
 ```
-root@myproject:~# ./stepctl
-
-=== Step Motor GPIO Control (sysfs) ===
- - reset     : gpio1020  (0: reset(assert), 1: unreset(deassert))
- - run       : gpio1021  (0: stop, 1: run)
- - dir       : gpio1022  (0: forward, 1: backward)
- - half_full : gpio1023  (0: half-step, 1: full-step)
-
-명령:
-  show                      : 현재 상태 출력
-  set <name> <0|1>          : 값 설정 (예: set run 1)
-  toggle <name>             : 0/1 토글
-  pulse <name> <ms> [level] : <level>(기본 1)로 <ms>ms 펄스
-  watch <ms>                : <ms>주기로 상태 갱신 (Ctrl+C 종료)
-  help                      : 도움말
-  quit/exit                 : 종료
-
-
-[GPIO 상태]
-  reset    (gpio1020) = 0
-  run      (gpio1021) = 0
-  dir      (gpio1022) = 0
-  half_full(gpio1023) = 0
+arm-linux-gnueabihf-gcc -o stepctl stepctl.c
 ```
 
-<br>
 
+<br>
 
 
 ```text
@@ -926,6 +891,32 @@ File → Transfer → ZMODEM → Receive 클릭
 XMODEM: 느림, 단일 파일만 (rx/sx)
 YMODEM: 중간, 배치 전송 가능 (ry/sy)
 ZMODEM: 빠름, 오류 복구, 이어받기 지원 (rz/sz) ← 권장
+```
+
+```
+root@myproject:~# ./stepctl
+
+=== Step Motor GPIO Control (sysfs) ===
+ - reset     : gpio1020  (0: reset(assert), 1: unreset(deassert))
+ - run       : gpio1021  (0: stop, 1: run)
+ - dir       : gpio1022  (0: forward, 1: backward)
+ - half_full : gpio1023  (0: half-step, 1: full-step)
+
+명령:
+  show                      : 현재 상태 출력
+  set <name> <0|1>          : 값 설정 (예: set run 1)
+  toggle <name>             : 0/1 토글
+  pulse <name> <ms> [level] : <level>(기본 1)로 <ms>ms 펄스
+  watch <ms>                : <ms>주기로 상태 갱신 (Ctrl+C 종료)
+  help                      : 도움말
+  quit/exit                 : 종료
+
+
+[GPIO 상태]
+  reset    (gpio1020) = 0
+  run      (gpio1021) = 0
+  dir      (gpio1022) = 0
+  half_full(gpio1023) = 0
 ```
 
 </details>
