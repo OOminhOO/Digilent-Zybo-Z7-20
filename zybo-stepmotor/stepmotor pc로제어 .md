@@ -1,4 +1,6 @@
-
+<details>
+<summary>펼치기/접기 **개발환경** </summary>  
+   
 # Zybo Z7-020 PL GPIO를 이용한 stepmotor 제어 가이드
 
 Zybo Z7-020에서 PL(Programmable Logic) 영역의 GPIO를 사용하여 LED를 제어하는 전체 프로세스를 단계별로 설명합니다.
@@ -2013,3 +2015,6 @@ done
 
 **작성일**: 2024  
 **테스트 환경**: Zybo Z7-020, Vivado 2022.2, PetaLinux 2022.2, Ubuntu 22.04.5 LTS
+
+
+</details>
