@@ -286,7 +286,7 @@ endmodule
 
 
 tools -> create and packege new ip  
-<img width="545" height="97" alt="image" src="https://github.com/user-attachments/assets/f03b4514-1abe-4024-956c-725a6322cf8e" />
+<img width="545" height="97" alt="image" src="https://github.com/user-attachments/assets/f03b4514-1abe-4024-956c-725a6322cf8e" />  
 
 
 #### Step 1: ZYNQ7 Processing System 추가
@@ -319,8 +319,14 @@ tools -> create and packege new ip
 2. "Make External" 선택
 3. 생성된 포트 이름: `coils` (또는 유사한 이름)
 
-<img width="1209" height="448" alt="image" src="https://github.com/user-attachments/assets/f984f7b9-f1d6-4de9-acf7-f99a6b0d21b6" />
+<br>
 
+<img width="995" height="484" alt="002" src="https://github.com/user-attachments/assets/a9de87aa-6fda-4716-ac66-10f6feb62b9b" />
+<br>
+<img width="1461" height="500" alt="001" src="https://github.com/user-attachments/assets/280f59ff-1195-457e-b728-81e9364a7c7e" />
+<br>
+<img width="1209" height="448" alt="image" src="https://github.com/user-attachments/assets/f984f7b9-f1d6-4de9-acf7-f99a6b0d21b6" />
+<br>
 
 
 ### 1.4 주소 할당 확인
@@ -518,11 +524,6 @@ CONFIG_GPIO_GENERIC=y
 
 <details>
 <summary>펼치기/접기 **개발환경** </summary>  
-
-<img width="995" height="484" alt="002" src="https://github.com/user-attachments/assets/a9de87aa-6fda-4716-ac66-10f6feb62b9b" />
-<br>
-<img width="1461" height="500" alt="001" src="https://github.com/user-attachments/assets/280f59ff-1195-457e-b728-81e9364a7c7e" />
-<br>
 
 
 
