@@ -715,6 +715,56 @@ root@myproject:~# ./stepctl
   half_full(gpio1023) = 0
 ```
 
+<br>
+
+```text
+# 시리얼 파일 전송 사용법 (TeraTerm)
+
+lrzsz 패키지 설치 후, TeraTerm을 통해 파일을 전송할 수 있습니다.
+
+
+보드에서 파일 수신 (PC → 보드):
+
+# 보드 콘솔에서
+cd /home/root
+
+# ZMODEM으로 수신 대기 (가장 권장)
+rz
+
+# 또는 YMODEM으로 수신
+ry
+
+TeraTerm에서 파일 전송:
+
+File → Transfer → ZMODEM → Send 클릭
+전송할 파일 선택 (예: gpio_test 실행파일)
+전송 완료 후 실행 권한 부여:
+
+chmod +x gpio_test
+./gpio_test
+
+
+보드에서 파일 송신 (보드 → PC):
+
+# 보드 콘솔에서
+cd /home/root
+
+# ZMODEM으로 송신
+sz filename
+
+TeraTerm에서 파일 수신:
+
+File → Transfer → ZMODEM → Receive 클릭
+저장 위치 선택
+
+프로토콜 비교:
+
+XMODEM: 느림, 단일 파일만 (rx/sx)
+YMODEM: 중간, 배치 전송 가능 (ry/sy)
+ZMODEM: 빠름, 오류 복구, 이어받기 지원 (rz/sz) ← 권장
+```
+
+
 ---
 
 =============================================================
