@@ -1,4 +1,4 @@
-<detail>
+
 # Zybo Z7-020 PL GPIO를 이용한 stepmotor 제어 가이드
 
 Zybo Z7-020에서 PL(Programmable Logic) 영역의 GPIO를 사용하여 LED를 제어하는 전체 프로세스를 단계별로 설명합니다.
@@ -2007,7 +2007,7 @@ done
 ## 🤝 기여
 
 개선 사항이나 오류 발견 시 Issue 또는 Pull Request를 환영합니다!
-</details>
+
 
 ---
 
