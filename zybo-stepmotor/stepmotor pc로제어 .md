@@ -1,9 +1,10 @@
-<details>
-<summary>펼치기/접기 **개발환경** </summary>  
+
    
 # Zybo Z7-020 PL GPIO를 이용한 stepmotor 제어 가이드
+<details>
+<summary>펼치기/접기 **개발환경** </summary>  
 
-Zybo Z7-020에서 PL(Programmable Logic) 영역의 GPIO를 사용하여 LED를 제어하는 전체 프로세스를 단계별로 설명합니다.
+Zybo Z7-020에서 PL(Programmable Logic) 영역의 GPIO를 사용하여 stepmotor 를 제어하는 전체 프로세스를 단계별로 설명합니다.
 
 <img width="495" height="488" alt="023" src="https://github.com/user-attachments/assets/a28c80bb-bb28-4b34-8b94-fa75e9859d27" />
 
@@ -129,9 +130,15 @@ set_property -dict { PACKAGE_PIN H15   IOSTANDARD LVCMOS33 } [get_ports { coils[
 3. 파일 저장: `stepmotor_top_wrapper.xsa`
 4. 이 파일을 Ubuntu로 전송 (USB, 네트워크 등)
 
----
+---  
 
+</details>
+
+  
 ## 2️⃣ PetaLinux 프로젝트 생성 (Ubuntu 22.04)
+
+<details>
+<summary>펼치기/접기 **개발환경** </summary>  
 
 ### 2.1 PetaLinux 환경 설정
 
@@ -252,10 +259,17 @@ CONFIG_GPIO_GENERIC=y
 ```
 ---
 
+</details>
+
+
+## 해결 안됨 ! bolck design에서 gpio 에서 xslice하지 않고 한번에 받아서 코드에서 나눠서 분배해줌
 
 =================================================
 ## 해결안 1
 =================================================
+
+<details>
+<summary>펼치기/접기 **개발환경** </summary>  
 
 <img width="995" height="484" alt="002" src="https://github.com/user-attachments/assets/a9de87aa-6fda-4716-ac66-10f6feb62b9b" />
 <br>
@@ -402,6 +416,35 @@ set_property -dict { PACKAGE_PIN H15   IOSTANDARD LVCMOS33 } [get_ports { coils[
 ```
 
 
+## shell script로 제어
+
+### 3.1 Zybo 부팅 및 로그인
+
+1. SD 카드를 Zybo에 삽입
+2. UART 연결 (115200 8N1)
+3. 전원 켜기
+4. 로그인: `root` / `root`
+
+### 3.2 GPIO sysfs 인터페이스 확인
+
+```bash
+# GPIO 컨트롤러 확인
+ls /sys/class/gpio/
+
+# gpiochip이 보이면 정상 (예: gpiochip496)
+# 번호는 시스템마다 다를 수 있음
+
+# GPIO 베이스 번호 확인
+cat /sys/class/gpio/gpiochip*/base
+cat /sys/class/gpio/gpiochip*/ngpio
+```
+
+예를 들어:
+- base: 496
+- ngpio: 4
+
+그러면 GPIO 번호는 **496, 497, 498, 499**입니다
+
 ```shc
 # GPIO export (LED0 = GPIO 1020 가정)
 echo 1020 > /sys/class/gpio/export
@@ -438,10 +481,14 @@ echo 1020 > /sys/class/gpio/unexport
 1023 - half_full (0:half, 1: full)
 ```
 
+## C파일을 arm용으로 컴파일 해서 제어
+
 ### stepctl.c (ARM Compile)
 
 ```
 arm-linux-gnueabihf-gcc -o stepctl stepctl.c
+//arm용으로 컵파일 우분투에서 그다음 share 폴더에 컴파일된 stepctl 복사  
+terater으로 ZMODEM으로 수신후에 chmod 설정후 실행  
 ```
 
 ```c
@@ -720,6 +767,8 @@ root@myproject:~# ./stepctl
 
 <br>
 
+
+
 ```text
 # 시리얼 파일 전송 사용법 (TeraTerm)
 
@@ -767,12 +816,18 @@ YMODEM: 중간, 배치 전송 가능 (ry/sy)
 ZMODEM: 빠름, 오류 복구, 이어받기 지원 (rz/sz) ← 권장
 ```
 
+</details>
+
 
 ---
 
 =============================================================
 # AXI4 Peripheral IP 생성 과정
-=============================================================
+=============================================================  
+
+<details>
+<summary>펼치기/접기 **오류 참조용 다시 할거임** </summary>  
+
 
 <img width="1154" height="452" alt="006" src="https://github.com/user-attachments/assets/40d6decf-b090-468d-95ad-401d186e5da3" />
 
@@ -1338,6 +1393,8 @@ module debounce #(
 endmodule
 ```
 
+
+</details>
 
 
 
