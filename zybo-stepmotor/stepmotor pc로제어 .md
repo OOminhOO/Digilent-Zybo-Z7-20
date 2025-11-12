@@ -928,7 +928,7 @@ root@myproject:~# ./stepctl
 ---
 
 =============================================================
-# 5. AXI4 Peripheral IP 생성 과정
+# 4. AXI4 Peripheral IP 생성 과정
 =============================================================  
 
 <details>
@@ -938,7 +938,190 @@ root@myproject:~# ./stepctl
 <img width="1154" height="452" alt="006" src="https://github.com/user-attachments/assets/40d6decf-b090-468d-95ad-401d186e5da3" />
 
 ### 1. Create and Package New IP 시작
-Vivado에서:
+Vivado에서 프로젝트 만든후 : ip만들기 위한 add source
+
+```verilog
+// zybo_z720_stepper_top.v - 50MHz version
+// ULN2003 Stepper Motor Controller for Zybo Z7-20
+// Clock: 50MHz (modified from 125MHz)
+
+module zybo_z720_stepper_top #(
+    parameter integer CLK_HZ        = 50_000_000,  // 50MHz
+    parameter integer STEPS_PER_SEC = 600
+)(
+    input  wire clk,
+    input  wire [3:0] in_signal,
+    output wire [3:0] coils
+);
+    // Input signal mapping
+    wire rst_n     = in_signal[0];  // Active-Low Reset
+    wire sw_run    = in_signal[1];  // Run/Stop control
+    wire sw_dir    = in_signal[2];  // Direction: 1=CW, 0=CCW
+    wire half_full = in_signal[3];  // Step mode: 1=half-step, 0=full-step
+    
+    // Debounced signals
+    wire run_clean, dir_clean;
+    
+    // Debounce for run signal
+    debounce #(
+        .CLK_HZ(CLK_HZ), 
+        .MS(10)
+    ) u_db_run (
+        .clk(clk), 
+        .rst_n(rst_n), 
+        .din(sw_run), 
+        .dout(run_clean)
+    );
+    
+    // Debounce for direction signal
+    debounce #(
+        .CLK_HZ(CLK_HZ), 
+        .MS(10)
+    ) u_db_dir (
+        .clk(clk), 
+        .rst_n(rst_n), 
+        .din(sw_dir), 
+        .dout(dir_clean)
+    );
+    
+    // Step timer calculation
+    // At 50MHz with 600 steps/sec: TICKS_PER_STEP = 83,333 ticks
+    // Step period = 1.667ms
+    localparam integer TICKS_PER_STEP = (CLK_HZ / STEPS_PER_SEC);
+    
+    reg [31:0] tick_cnt;
+    wire step_pulse = (tick_cnt == 0);
+    
+    // Step timer counter
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n)
+            tick_cnt <= TICKS_PER_STEP - 1;
+        else if (run_clean)
+            tick_cnt <= (tick_cnt == 0) ? (TICKS_PER_STEP - 1) : (tick_cnt - 1);
+        else
+            tick_cnt <= TICKS_PER_STEP - 1;
+    end
+    
+    // Step index (0-7 for half-step, 0-3 for full-step)
+    reg [2:0] step_idx;
+    reg [2:0] max_idx;
+    
+    // Maximum index based on step mode
+    always @(*) 
+        max_idx = (half_full) ? 3'd7 : 3'd3;
+    
+    // Step index counter
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n)
+            step_idx <= 0;
+        else if (run_clean && step_pulse) begin
+            if (dir_clean) begin
+                // Clockwise rotation
+                if (step_idx == max_idx) 
+                    step_idx <= 0;
+                else                     
+                    step_idx <= step_idx + 1'b1;
+            end else begin
+                // Counter-clockwise rotation
+                if (step_idx == 0) 
+                    step_idx <= max_idx;
+                else               
+                    step_idx <= step_idx - 1'b1;
+            end
+        end
+    end
+    
+    // Coil pattern ROM
+    reg [3:0] patt;
+    
+    always @(*) begin
+        if (half_full) begin
+            // Half-step sequence (8 steps)
+            case (step_idx)
+                3'd0: patt = 4'b1000;  // A
+                3'd1: patt = 4'b1100;  // AB
+                3'd2: patt = 4'b0100;  // B
+                3'd3: patt = 4'b0110;  // BC
+                3'd4: patt = 4'b0010;  // C
+                3'd5: patt = 4'b0011;  // CD
+                3'd6: patt = 4'b0001;  // D
+                3'd7: patt = 4'b1001;  // DA
+                default: patt = 4'b0000;
+            endcase
+        end else begin
+            // Full-step sequence (4 steps)
+            case (step_idx[1:0])
+                2'd0: patt = 4'b1100;  // AB
+                2'd1: patt = 4'b0110;  // BC
+                2'd2: patt = 4'b0011;  // CD
+                2'd3: patt = 4'b1001;  // DA
+                default: patt = 4'b0000;
+            endcase
+        end
+    end
+    
+    // Output coil pattern (0 when stopped)
+    assign coils = run_clean ? patt : 4'b0000;
+
+endmodule
+
+// ---------------------- debounce ----------------------
+// Input debounce module for switch signals
+// Filters out mechanical bounce noise
+
+module debounce #(
+    parameter integer CLK_HZ = 50_000_000,  // 50MHz
+    parameter integer MS     = 10           // 10ms debounce time
+)(
+    input  wire clk,
+    input  wire rst_n,
+    input  wire din,
+    output reg  dout
+);
+    // Counter max value calculation
+    // At 50MHz with 10ms: CNT_MAX = 400,000
+    // Actual debounce time = 8ms (close enough)
+    localparam integer CNT_MAX = (CLK_HZ/1250)*MS;
+    
+    // Double synchronizer for metastability prevention
+    reg din_q1, din_q2;
+    reg [31:0] cnt;
+    
+    // Input synchronizer
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            din_q1 <= 1'b0;
+            din_q2 <= 1'b0;
+        end else begin
+            din_q1 <= din;
+            din_q2 <= din_q1;
+        end
+    end
+    
+    // Debounce counter
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            cnt  <= 0;
+            dout <= 0;
+        end else if (din_q2 == dout) begin
+            // Input stable, reset counter
+            cnt <= 0;
+        end else begin
+            // Input changed, count up
+            if (cnt >= CNT_MAX) begin
+                // Counter reached max, update output
+                dout <= din_q2;
+                cnt  <= 0;
+            end else begin
+                cnt <= cnt + 1;
+            end
+        end
+    end
+
+endmodule
+
+```
+
 ```
 Tools → Create and Package New IP...
 → Create a new AXI4 peripheral 선택
@@ -993,92 +1176,554 @@ IP를 생성하면 <ip_name>_v1_0_S00_AXI.v 파일이 생성됩니다. 이 파�
 
 ```verilog
 // stepper_motor_ctrl_v1_0_S00_AXI.v 수정 예시
+`timescale 1 ns / 1 ps
 
-module stepper_motor_ctrl_v1_0_S00_AXI #(
+module stepper_motor_ctrl_v1_0_S00_AXI #
+(
+    // Users to add parameters here
+    parameter integer CLK_HZ = 125_000_000,
+    // User parameters ends
+    // Do not modify the parameters beyond this line
+
+    // Width of S_AXI data bus
     parameter integer C_S_AXI_DATA_WIDTH = 32,
-    parameter integer C_S_AXI_ADDR_WIDTH = 4,
-    parameter integer CLK_HZ = 125_000_000
-)(
-    // AXI ports...
-    input wire S_AXI_ACLK,
-    input wire S_AXI_ARESETN,
-    // ... (standard AXI signals)
-    
-    // User ports - Stepper Motor Interface
-    output wire [3:0] coils_out
+    // Width of S_AXI address bus
+    parameter integer C_S_AXI_ADDR_WIDTH = 4
+)
+(
+    // Users to add ports here
+    output wire [3:0] coils_out,
+    // User ports ends
+    // Do not modify the ports beyond this line
+
+    // Global Clock Signal
+    input wire  S_AXI_ACLK,
+    // Global Reset Signal. This Signal is Active LOW
+    input wire  S_AXI_ARESETN,
+    // Write address (issued by master, acceped by Slave)
+    input wire [C_S_AXI_ADDR_WIDTH-1 : 0] S_AXI_AWADDR,
+    // Write channel Protection type. This signal indicates the
+    // privilege and security level of the transaction, and whether
+    // the transaction is a data access or an instruction access.
+    input wire [2 : 0] S_AXI_AWPROT,
+    // Write address valid. This signal indicates that the master signaling
+    // valid write address and control information.
+    input wire  S_AXI_AWVALID,
+    // Write address ready. This signal indicates that the slave is ready
+    // to accept an address and associated control signals.
+    output wire  S_AXI_AWREADY,
+    // Write data (issued by master, acceped by Slave) 
+    input wire [C_S_AXI_DATA_WIDTH-1 : 0] S_AXI_WDATA,
+    // Write strobes. This signal indicates which byte lanes hold
+    // valid data. There is one write strobe bit for each eight
+    // bits of the write data bus.    
+    input wire [(C_S_AXI_DATA_WIDTH/8)-1 : 0] S_AXI_WSTRB,
+    // Write valid. This signal indicates that valid write
+    // data and strobes are available.
+    input wire  S_AXI_WVALID,
+    // Write ready. This signal indicates that the slave
+    // can accept the write data.
+    output wire  S_AXI_WREADY,
+    // Write response. This signal indicates the status
+    // of the write transaction.
+    output wire [1 : 0] S_AXI_BRESP,
+    // Write response valid. This signal indicates that the channel
+    // is signaling a valid write response.
+    output wire  S_AXI_BVALID,
+    // Response ready. This signal indicates that the master
+    // can accept a write response.
+    input wire  S_AXI_BREADY,
+    // Read address (issued by master, acceped by Slave)
+    input wire [C_S_AXI_ADDR_WIDTH-1 : 0] S_AXI_ARADDR,
+    // Protection type. This signal indicates the privilege
+    // and security level of the transaction, and whether the
+    // transaction is a data access or an instruction access.
+    input wire [2 : 0] S_AXI_ARPROT,
+    // Read address valid. This signal indicates that the channel
+    // is signaling valid read address and control information.
+    input wire  S_AXI_ARVALID,
+    // Read address ready. This signal indicates that the slave is
+    // ready to accept an address and associated control signals.
+    output wire  S_AXI_ARREADY,
+    // Read data (issued by slave)
+    output wire [C_S_AXI_DATA_WIDTH-1 : 0] S_AXI_RDATA,
+    // Read response. This signal indicates the status of the
+    // read transfer.
+    output wire [1 : 0] S_AXI_RRESP,
+    // Read valid. This signal indicates that the channel is
+    // signaling the required read data.
+    output wire  S_AXI_RVALID,
+    // Read ready. This signal indicates that the master can
+    // accept the read data and response information.
+    input wire  S_AXI_RREADY
 );
 
-    // AXI4-Lite signals (기존 생성된 코드 유지)
-    // ...
+    // AXI4LITE signals
+    reg [C_S_AXI_ADDR_WIDTH-1 : 0]  axi_awaddr;
+    reg     axi_awready;
+    reg     axi_wready;
+    reg [1 : 0]     axi_bresp;
+    reg     axi_bvalid;
+    reg [C_S_AXI_ADDR_WIDTH-1 : 0]  axi_araddr;
+    reg     axi_arready;
+    reg [C_S_AXI_DATA_WIDTH-1 : 0]  axi_rdata;
+    reg [1 : 0]     axi_rresp;
+    reg     axi_rvalid;
 
-    // User registers
-    reg [31:0] control_reg;  // slv_reg0
-    reg [31:0] status_reg;   // slv_reg1  
-    reg [31:0] speed_reg;    // slv_reg2
+    // Example-specific design signals
+    // local parameter for addressing 32 bit / 64 bit C_S_AXI_DATA_WIDTH
+    // ADDR_LSB is used for addressing 32/64 bit registers/memories
+    // ADDR_LSB = 2 for 32 bits (n downto 2)
+    // ADDR_LSB = 3 for 64 bits (n downto 3)
+    localparam integer ADDR_LSB = (C_S_AXI_DATA_WIDTH/32) + 1;
+    localparam integer OPT_MEM_ADDR_BITS = 1;
+    //----------------------------------------------
+    //-- Signals for user logic register space example
+    //------------------------------------------------
+    //-- Number of Slave Registers 4
+    reg [C_S_AXI_DATA_WIDTH-1:0]    slv_reg0;  // Control Register
+    reg [C_S_AXI_DATA_WIDTH-1:0]    slv_reg1;  // Status Register (read-only)
+    reg [C_S_AXI_DATA_WIDTH-1:0]    slv_reg2;  // Speed Register
+    reg [C_S_AXI_DATA_WIDTH-1:0]    slv_reg3;  // Reserved
+    wire     slv_reg_rden;
+    wire     slv_reg_wren;
+    reg [C_S_AXI_DATA_WIDTH-1:0]     reg_data_out;
+    integer  byte_index;
+    reg  aw_en;
+
+    // I/O Connections assignments
+
+    assign S_AXI_AWREADY    = axi_awready;
+    assign S_AXI_WREADY = axi_wready;
+    assign S_AXI_BRESP  = axi_bresp;
+    assign S_AXI_BVALID = axi_bvalid;
+    assign S_AXI_ARREADY    = axi_arready;
+    assign S_AXI_RDATA  = axi_rdata;
+    assign S_AXI_RRESP  = axi_rresp;
+    assign S_AXI_RVALID = axi_rvalid;
     
-    // Control signals extraction
-    wire motor_enable = control_reg[0];
-    wire motor_run    = control_reg[1];
-    wire motor_dir    = control_reg[2];
-    wire half_full    = control_reg[3];
+    // Implement axi_awready generation
+    // axi_awready is asserted for one S_AXI_ACLK clock cycle when both
+    // S_AXI_AWVALID and S_AXI_WVALID are asserted. axi_awready is
+    // de-asserted when reset is low.
+
+    always @( posedge S_AXI_ACLK )
+    begin
+      if ( S_AXI_ARESETN == 1'b0 )
+        begin
+          axi_awready <= 1'b0;
+          aw_en <= 1'b1;
+        end 
+      else
+        begin    
+          if (~axi_awready && S_AXI_AWVALID && S_AXI_WVALID && aw_en)
+            begin
+              axi_awready <= 1'b1;
+              aw_en <= 1'b0;
+            end
+            else if (S_AXI_BREADY && axi_bvalid)
+                begin
+                  aw_en <= 1'b1;
+                  axi_awready <= 1'b0;
+                end
+          else           
+            begin
+              axi_awready <= 1'b0;
+            end
+        end 
+    end       
+
+    // Implement axi_awaddr latching
+    // This process is used to latch the address when both 
+    // S_AXI_AWVALID and S_AXI_WVALID are valid. 
+
+    always @( posedge S_AXI_ACLK )
+    begin
+      if ( S_AXI_ARESETN == 1'b0 )
+        begin
+          axi_awaddr <= 0;
+        end 
+      else
+        begin    
+          if (~axi_awready && S_AXI_AWVALID && S_AXI_WVALID && aw_en)
+            begin
+              axi_awaddr <= S_AXI_AWADDR;
+            end
+        end 
+    end       
+
+    // Implement axi_wready generation
+    // axi_wready is asserted for one S_AXI_ACLK clock cycle when both
+    // S_AXI_AWVALID and S_AXI_WVALID are asserted. axi_wready is 
+    // de-asserted when reset is low. 
+
+    always @( posedge S_AXI_ACLK )
+    begin
+      if ( S_AXI_ARESETN == 1'b0 )
+        begin
+          axi_wready <= 1'b0;
+        end 
+      else
+        begin    
+          if (~axi_wready && S_AXI_WVALID && S_AXI_AWVALID && aw_en )
+            begin
+              axi_wready <= 1'b1;
+            end
+          else
+            begin
+              axi_wready <= 1'b0;
+            end
+        end 
+    end       
+
+    // Implement memory mapped register select and write logic generation
+    // The write data is accepted and written to memory mapped registers when
+    // axi_awready, S_AXI_WVALID, axi_wready and S_AXI_WVALID are asserted. Write strobes are used to
+    // select byte enables of slave registers while writing.
+    // These registers are cleared when reset (active low) is applied.
+    // Slave register write enable is asserted when valid address and data are available
+    // and the slave is ready to accept the write address and write data.
+    assign slv_reg_wren = axi_wready && S_AXI_WVALID && axi_awready && S_AXI_AWVALID;
+
+    always @( posedge S_AXI_ACLK )
+    begin
+      if ( S_AXI_ARESETN == 1'b0 )
+        begin
+          slv_reg0 <= 0;
+          slv_reg1 <= 0;
+          slv_reg2 <= 600;  // Default speed: 600 steps/sec
+          slv_reg3 <= 0;
+        end 
+      else begin
+        if (slv_reg_wren)
+          begin
+            case ( axi_awaddr[ADDR_LSB+OPT_MEM_ADDR_BITS:ADDR_LSB] )
+              2'h0:
+                for ( byte_index = 0; byte_index <= (C_S_AXI_DATA_WIDTH/8)-1; byte_index = byte_index+1 )
+                  if ( S_AXI_WSTRB[byte_index] == 1 ) begin
+                    slv_reg0[(byte_index*8) +: 8] <= S_AXI_WDATA[(byte_index*8) +: 8];
+                  end  
+              2'h1:
+                // slv_reg1 is read-only (status register updated by hardware)
+                slv_reg1 <= slv_reg1;
+              2'h2:
+                for ( byte_index = 0; byte_index <= (C_S_AXI_DATA_WIDTH/8)-1; byte_index = byte_index+1 )
+                  if ( S_AXI_WSTRB[byte_index] == 1 ) begin
+                    slv_reg2[(byte_index*8) +: 8] <= S_AXI_WDATA[(byte_index*8) +: 8];
+                  end  
+              2'h3:
+                for ( byte_index = 0; byte_index <= (C_S_AXI_DATA_WIDTH/8)-1; byte_index = byte_index+1 )
+                  if ( S_AXI_WSTRB[byte_index] == 1 ) begin
+                    slv_reg3[(byte_index*8) +: 8] <= S_AXI_WDATA[(byte_index*8) +: 8];
+                  end  
+              default : begin
+                          slv_reg0 <= slv_reg0;
+                          slv_reg1 <= slv_reg1;
+                          slv_reg2 <= slv_reg2;
+                          slv_reg3 <= slv_reg3;
+                        end
+            endcase
+          end
+      end
+    end    
+
+    // Implement write response logic generation
+    // The write response and response valid signals are asserted by the slave 
+    // when axi_wready, S_AXI_WVALID, axi_wready and S_AXI_WVALID are asserted.  
+    // This marks the acceptance of address and indicates the status of 
+    // write transaction.
+
+    always @( posedge S_AXI_ACLK )
+    begin
+      if ( S_AXI_ARESETN == 1'b0 )
+        begin
+          axi_bvalid  <= 0;
+          axi_bresp   <= 2'b0;
+        end 
+      else
+        begin    
+          if (axi_awready && S_AXI_AWVALID && ~axi_bvalid && axi_wready && S_AXI_WVALID)
+            begin
+              axi_bvalid <= 1'b1;
+              axi_bresp  <= 2'b0; // 'OKAY' response 
+            end                   // work error responses in future
+          else
+            begin
+              if (S_AXI_BREADY && axi_bvalid) 
+                begin
+                  axi_bvalid <= 1'b0; 
+                end  
+            end
+        end
+    end   
+
+    // Implement axi_arready generation
+    // axi_arready is asserted for one S_AXI_ACLK clock cycle when
+    // S_AXI_ARVALID is asserted. axi_awready is 
+    // de-asserted when reset (active low) is asserted. 
+    // The read address is also latched when S_AXI_ARVALID is 
+    // asserted. axi_araddr is reset to zero on reset assertion.
+
+    always @( posedge S_AXI_ACLK )
+    begin
+      if ( S_AXI_ARESETN == 1'b0 )
+        begin
+          axi_arready <= 1'b0;
+          axi_araddr  <= 32'b0;
+        end 
+      else
+        begin    
+          if (~axi_arready && S_AXI_ARVALID)
+            begin
+              axi_arready <= 1'b1;
+              axi_araddr  <= S_AXI_ARADDR;
+            end
+          else
+            begin
+              axi_arready <= 1'b0;
+            end
+        end 
+    end       
+
+    // Implement axi_arvalid generation
+    // axi_rvalid is asserted for one S_AXI_ACLK clock cycle when both 
+    // S_AXI_ARVALID and axi_arready are asserted. The slave registers 
+    // data are available on the axi_rdata bus at this instance. The 
+    // assertion of axi_rvalid marks the validity of read data on the 
+    // bus and axi_rresp indicates the status of read transaction.axi_rvalid 
+    // is deasserted on reset (active low). axi_rresp and axi_rdata are 
+    // cleared to zero on reset (active low).  
+    always @( posedge S_AXI_ACLK )
+    begin
+      if ( S_AXI_ARESETN == 1'b0 )
+        begin
+          axi_rvalid <= 0;
+          axi_rresp  <= 0;
+        end 
+      else
+        begin    
+          if (axi_arready && S_AXI_ARVALID && ~axi_rvalid)
+            begin
+              axi_rvalid <= 1'b1;
+              axi_rresp  <= 2'b0; // 'OKAY' response
+            end   
+          else if (axi_rvalid && S_AXI_RREADY)
+            begin
+              axi_rvalid <= 1'b0;
+            end                
+        end
+    end    
+
+    // Implement memory mapped register select and read logic generation
+    // Slave register read enable is asserted when valid address is available
+    // and the slave is ready to accept the read address.
+    assign slv_reg_rden = axi_arready & S_AXI_ARVALID & ~axi_rvalid;
     
-    // Speed parameter
-    wire [15:0] steps_per_sec = speed_reg[15:0];
+    always @(*)
+    begin
+          // Address decoding for reading registers
+          case ( axi_araddr[ADDR_LSB+OPT_MEM_ADDR_BITS:ADDR_LSB] )
+            2'h0   : reg_data_out <= slv_reg0;
+            2'h1   : reg_data_out <= slv_reg1;
+            2'h2   : reg_data_out <= slv_reg2;
+            2'h3   : reg_data_out <= slv_reg3;
+            default : reg_data_out <= 0;
+          endcase
+    end
+
+    // Output register or memory read data
+    always @( posedge S_AXI_ACLK )
+    begin
+      if ( S_AXI_ARESETN == 1'b0 )
+        begin
+          axi_rdata  <= 0;
+        end 
+      else
+        begin    
+          if (slv_reg_rden)
+            begin
+              axi_rdata <= reg_data_out;
+            end   
+        end
+    end    
+
+    // ============================================================
+    // Add user logic here
+    // ============================================================
     
-    // Instantiate your stepper controller
+    // Register Map:
+    // 0x00: Control Register
+    //       [0] - motor_run (1=run, 0=stop)
+    //       [1] - motor_dir (1=CW, 0=CCW)
+    //       [2] - half_full (1=half-step, 0=full-step)
+    // 0x04: Status Register (read-only)
+    //       [3:0] - coils output state
+    // 0x08: Speed Register (future use)
+    // 0x0C: Reserved
+    
+    // Extract control signals directly from AXI registers
+    wire motor_run    = slv_reg0[1];
+    wire motor_dir    = slv_reg0[2];
+    wire half_full    = slv_reg0[3];
+    
+    // Build input signal for stepper controller
     wire [3:0] in_signal = {half_full, motor_dir, motor_run, S_AXI_ARESETN};
     
+    // Instantiate stepper motor controller
     zybo_z720_stepper_top #(
         .CLK_HZ(CLK_HZ),
-        .STEPS_PER_SEC(600)  // or use speed_reg value
+        .STEPS_PER_SEC(600)
     ) stepper_inst (
         .clk(S_AXI_ACLK),
         .in_signal(in_signal),
         .coils(coils_out)
     );
     
-    // Update status register
+    // Update status register with current coil states
     always @(posedge S_AXI_ACLK) begin
         if (!S_AXI_ARESETN)
-            status_reg <= 0;
+            slv_reg1 <= 0;
         else
-            status_reg <= {28'h0, coils_out};
+            slv_reg1 <= {28'h0, coils_out};
     end
 
-    // AXI write/read logic (기존 템플릿 코드 활용)
-    // slv_reg0 → control_reg
-    // slv_reg1 → status_reg (read-only)
-    // slv_reg2 → speed_reg
-    
+    // User logic ends
+
 endmodule
 ```
 
 ### 5. Top-level Wrapper 수정
 stepper_motor_ctrl_v1_0.v 파일에 외부 포트 추가:
 ```verilog
-module stepper_motor_ctrl_v1_0 #(
-    parameter integer C_S00_AXI_DATA_WIDTH = 32,
-    parameter integer C_S00_AXI_ADDR_WIDTH = 4
+// zybo_z720_stepper_top.v
+module zybo_z720_stepper_top #(
+    parameter integer CLK_HZ        = 125_000_000,
+    parameter integer STEPS_PER_SEC = 600
 )(
-    // AXI ports
-    input wire s00_axi_aclk,
-    input wire s00_axi_aresetn,
-    // ... (standard AXI ports)
-    
-    // User ports - add this!
+    input  wire clk,
+    input  wire [3:0] in_signal,
     output wire [3:0] coils
 );
 
-    stepper_motor_ctrl_v1_0_S00_AXI #(
-        .C_S_AXI_DATA_WIDTH(C_S00_AXI_DATA_WIDTH),
-        .C_S_AXI_ADDR_WIDTH(C_S00_AXI_ADDR_WIDTH)
-    ) stepper_motor_ctrl_v1_0_S00_AXI_inst (
-        // AXI connections...
-        .coils_out(coils)  // Connect user port
+    wire rst_n     = in_signal[0];  // Active-Low Reset
+    wire sw_run    = in_signal[1];
+    wire sw_dir    = in_signal[2];
+    wire half_full = in_signal[3];
+
+    // ��ٿ
+    wire run_clean, dir_clean;
+    debounce #(.CLK_HZ(CLK_HZ), .MS(10)) u_db_run (
+        .clk(clk), .rst_n(rst_n), .din(sw_run), .dout(run_clean)
+    );
+    debounce #(.CLK_HZ(CLK_HZ), .MS(10)) u_db_dir (
+        .clk(clk), .rst_n(rst_n), .din(sw_dir), .dout(dir_clean)
     );
 
+    // ���� Ÿ�̸�
+    localparam integer TICKS_PER_STEP = (CLK_HZ / STEPS_PER_SEC);
+    reg [31:0] tick_cnt;
+    wire step_pulse = (tick_cnt == 0);
+
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n)
+            tick_cnt <= TICKS_PER_STEP - 1;
+        else if (run_clean)
+            tick_cnt <= (tick_cnt == 0) ? (TICKS_PER_STEP - 1) : (tick_cnt - 1);
+        else
+            tick_cnt <= TICKS_PER_STEP - 1;
+    end
+
+    // ���� �ε���
+    reg [2:0] step_idx;
+    reg [2:0] max_idx;
+    always @(*) max_idx = (half_full) ? 3'd7 : 3'd3;
+
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n)
+            step_idx <= 0;
+        else if (run_clean && step_pulse) begin
+            if (dir_clean) begin
+                if (step_idx == max_idx) step_idx <= 0;
+                else                     step_idx <= step_idx + 1'b1;
+            end else begin
+                if (step_idx == 0) step_idx <= max_idx;
+                else               step_idx <= step_idx - 1'b1;
+            end
+        end
+    end
+
+    // ������ ROM
+    reg [3:0] patt;
+    always @(*) begin
+        if (half_full) begin
+            case (step_idx)
+                3'd0: patt = 4'b1000;
+                3'd1: patt = 4'b1100;
+                3'd2: patt = 4'b0100;
+                3'd3: patt = 4'b0110;
+                3'd4: patt = 4'b0010;
+                3'd5: patt = 4'b0011;
+                3'd6: patt = 4'b0001;
+                3'd7: patt = 4'b1001;
+                default: patt = 4'b0000;
+            endcase
+        end else begin
+            case (step_idx[1:0])
+                2'd0: patt = 4'b1100;
+                2'd1: patt = 4'b0110;
+                2'd2: patt = 4'b0011;
+                2'd3: patt = 4'b1001;
+                default: patt = 4'b0000;
+            endcase
+        end
+    end
+
+    assign coils = run_clean ? patt : 4'b0000;
+
+endmodule
+
+// ---------------------- debounce ----------------------
+module debounce #(
+    parameter integer CLK_HZ = 125_000_000,
+    parameter integer MS     = 10
+)(
+    input  wire clk,
+    input  wire rst_n,
+    input  wire din,
+    output reg  dout
+);
+    localparam integer CNT_MAX = (CLK_HZ/1250)*MS;
+    reg din_q1, din_q2;
+    reg [31:0] cnt;
+
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            din_q1 <= 1'b0;
+            din_q2 <= 1'b0;
+        end else begin
+            din_q1 <= din;
+            din_q2 <= din_q1;
+        end
+    end
+
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            cnt  <= 0;
+            dout <= 0;
+        end else if (din_q2 == dout) begin
+            cnt <= 0;
+        end else begin
+            if (cnt >= CNT_MAX) begin
+                dout <= din_q2;
+                cnt  <= 0;
+            end else begin
+                cnt <= cnt + 1;
+            end
+        end
+    end
 endmodule
 ```
+
 ### 5. 확인하기
 
 ```
@@ -1097,6 +1742,8 @@ C:\Users\Administrator\zybo_z720_stepper_top\zybo_z720_stepper_top.gen\sources_1
    * debounce.v
 
 #### 5.2. IP를 다시 패키징 (권장 방법)
+
+<!--
    * IP Catalog에서 생성한 IP를 수정하는 방법:
    * Step 1: IP를 Edit 모드로 열기
 ```
@@ -1142,6 +1789,13 @@ Add Files → Add File or Add Directory
   </spirit:file>
 </spirit:fileSet>
 ```
+
+-->
+
+<img width="1121" height="629" alt="image" src="https://github.com/user-attachments/assets/c99d497f-5045-4dd7-86a7-e74ce80baa5e" />
+<br>
+업데이트후 repackage하기
+<br>
 
 ### 6. Constraints 파일 준비
 IP 패키징 후 Block Design에서 사용할 때 외부 포트로 연결:
