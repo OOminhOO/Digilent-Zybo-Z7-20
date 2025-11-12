@@ -310,8 +310,7 @@ tools -> create and packege new ip
 
 #### Step 4: stepmotor ip 추가
 1. 새로 만들었던 ip 추가후 gpio_io_o out put 을 stepmotor ip 입력에 연결
-2. clk는 zynq의 fclk_clk0로 연결 (혹은 새로 하나 만들어서 125M로 설정가능)
-3. 이전에 코드의 파라미터 50M로 바꿔주기(업데이트)
+2. clk는 zynq의 fclk_clk1 125Mhz 만들어서 연결 (혹은 새로 하나 만들어서 125M로 설정가능)  
   
 
 #### Step 5:  stepmotor 포트를 외부로 연결
