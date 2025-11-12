@@ -135,7 +135,7 @@ Zybo Z7-020에서 PL(Programmable Logic) 영역의 GPIO를 사용하여 stepmoto
 
 1. Vivado 2022.2 실행
 2. "Create Project" 클릭
-3. 프로젝트 이름: `zybo_gpio_led`
+3. 프로젝트 이름: `stepmotor`
 4. 프로젝트 위치 지정
 5. "RTL Project" 선택, "Do not specify sources at this time" 체크
 6. Board 선택: **Digilent Zybo Z7-20** 선택
@@ -144,7 +144,7 @@ Zybo Z7-020에서 PL(Programmable Logic) 영역의 GPIO를 사용하여 stepmoto
 ### 1.2 Block Design 생성
 
 1. "Create Block Design" 클릭
-2. Design 이름: `system`
+2. Design 이름: `stepper`
 
 
 ### 1.3 IP 추가 및 연결
@@ -322,7 +322,11 @@ tools -> create and packege new ip
 
 <img width="995" height="484" alt="002" src="https://github.com/user-attachments/assets/a9de87aa-6fda-4716-ac66-10f6feb62b9b" />
 <br>
+입력을 한번에 받아서 zybo-z720-stepper-top-0모듈 내부 verilog 코드에서 4개로 나누어서 할당해줌
+<br>
 <img width="1461" height="500" alt="001" src="https://github.com/user-attachments/assets/280f59ff-1195-457e-b728-81e9364a7c7e" />
+<br>
+이렇게 4개를 나눠서 받아주면 정상작동 안함 xslice해서 나누어서 받거나 하나로 받아서 내부에서 나눠주거나 해야함
 <br>
 <img width="1209" height="448" alt="image" src="https://github.com/user-attachments/assets/f984f7b9-f1d6-4de9-acf7-f99a6b0d21b6" />
 <br>
